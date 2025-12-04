@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Detektor Objek — Web (mirip p1 face detector)</title>
+  <style>
+    /* style.css - disertakan langsung agar mudah dipakai */
+    :root{
+      --bg:#0f1724; --card:#0b1220; --accent:#06b6d4; --muted:#94a3b8; --glass: rgba(255,255,255,0.03);
+      --radius:14px; --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Courier New", monospace;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial; background:linear-gradient(180deg,#071024 0%, #071b2b 100%); color:#e6eef6}
+    .wrap{max-width:1100px;margin:28px auto;padding:20px}
+    header{display:flex;gap:16px;align-items:center}
+    .logo{width:56px;height:56px;border-radius:12px;background:linear-gradient(135deg,var(--accent),#7c3aed);display:flex;align-items:center;justify-content:center;font-weight:700}
+    h1{margin:0;font-size:20px}
+    p.lead{margin:6px 0 0;color:var(--muted);font-size:13px}
+
+    .card{background:var(--card);padding:14px;border-radius:var(--radius);box-shadow:0 6px 18px rgba(2,6,23,0.6);margin-top:18px}
+    .stage{display:grid;grid-template-columns:1fr 320px;gap:18px}
+
+    /* video + canvas container */
+    .viewer{position:relative;background:var(--glass);border-radius:12px;overflow:hidden;min-height:420px;display:flex;align-items:center;justify-content:center}
+    video{width:100%;height:auto;display:block;transform:scaleX(-1)} /* flip so it feels like a mirror */
+    canvas{position:absolute;left:0;top:0;pointer-events:none;transform:scaleX(-1)}
+
+    .controls{padding:12px}
+    .controls .row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+    button{background:transparent;color:var(--accent);border:1px solid rgba(255,255,255,0.06);padding:8px 10px;border-radius:10px;cursor:pointer}
+    button.primary{background:linear-gradient(90deg,var(--accent),#7c3aed);color:#031023;border:none}
+    label{font-size:13px;color:var(--muted)}
+
+    .sidebar{display:flex;flex-direction:column;gap:12px}
+    .panel{background:linear-gradient(180deg,rgba(255,255,255,0.02),transparent);padding:10px;border-radius:10px}
+    .stats{font-family:var(--mono);font-size:13px;color:var(--muted)}
+    input[type=range]{width:100%}
+    .badges{display:flex;flex-wrap:wrap;gap:6px}
+    .badge{background:rgba(255,255,255,0.04);padding:6px 8px;border-radius:8px;font-size:13px}
+
+    footer{margin-top:18px;font-size:13px;color:var(--muted)}
+
+    @media (max-width:980px){
+      .stage{grid-template-columns:1fr}
+      .sidebar{order:2}
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="logo">OD</div>
+      <div>
+        <h1>Detektor Objek (Webcam) — mirip page p1 (face detector)</h1>
+        <p class="lead">Deteksi objek realtime pakai model COCO-SSD (TensorFlow.js). Buka izin kamera, lalu tekan "Start".</p>
+      </div>
+    </header>
+
+    <div class="card">
+      <div class="stage">
+        <div>
+          <div class="viewer" id="viewer">
+            <video id="video" autoplay muted playsinline></video>
+            <canvas id="overlay"></canvas>
+            <!-- fallback message -->
+            <div id="no-camera" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:16px;">Izinkan kamera atau unggah gambar</div>
+          </div>
+
+          <div style="display:flex;gap:8px;margin-top:10px;align-items:center">
+            <div class="controls">
+              <div class="row">
+                <button id="startBtn" class="primary">Start Kamera</button>
+                <button id="stopBtn">Stop</button>
+                <button id="snapshotBtn">Ambil Snapshot</button>
+                <input id="imgUpload" type="file" accept="image/*" />
+              </div>
+              <div class="row">
+                <label for="minScore">Ambang kepercayaan: <span id="scoreLabel">0.5</span></label>
+                <input id="minScore" type="range" min="0" max="1" step="0.01" value="0.5" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <aside class="sidebar">
+          <div class="panel">
+            <div class="stats">
+              <div>Model: <strong id="modelName">-</strong></div>
+              <div>FPS: <strong id="fps">0</strong></div>
+              <div>Objek terdeteksi: <strong id="count">0</strong></div>
+            </div>
+            <div style="margin-top:8px" class="badges" id="labelList"></div>
+          </div>
+
+          <div class="panel">
+            <div style="font-weight:600">Petunjuk singkat</div>
+            <ol style="margin:8px 0 0 16px;color:var(--muted);font-size:13px">
+              <li>Beri izin kamera lalu tekan <em>Start Kamera</em>.</li>
+              <li>Atur ambang kepercayaan (confidence) jika ingin lebih selektif.</li>
+              <li>Bisa juga unggah gambar untuk deteksi statis.</li>
+            </ol>
+          </div>
+
+          <div class="panel">
+            <div style="font-weight:600">Informasi</div>
+            <div style="color:var(--muted);font-size:13px;margin-top:6px">Model: COCO-SSD (80 kelas umum). Tidak perlu server — semua berjalan di browser.</div>
+          </div>
+        </aside>
+      </div>
+
+      <footer>
+        Catatan: performa bergantung perangkat. Untuk hasil lebih cepat gunakan laptop/PC dengan GPU.
+      </footer>
+    </div>
+  </div>
+
+  <!-- Libraries: TensorFlow.js dan COCO-SSD -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.9.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.2/dist/coco-ssd.min.js"></script>
+
+  <script>
+    // script.js (lengkap)
+    const video = document.getElementById('video');
+    const overlay = document.getElementById('overlay');
+    const ctx = overlay.getContext('2d');
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const snapshotBtn = document.getElementById('snapshotBtn');
+    const imgUpload = document.getElementById('imgUpload');
+
+    const modelNameEl = document.getElementById('modelName');
+    const fpsEl = document.getElementById('fps');
+    const countEl = document.getElementById('count');
+    const labelList = document.getElementById('labelList');
+    const minScoreEl = document.getElementById('minScore');
+    const scoreLabel = document.getElementById('scoreLabel');
+    const noCamera = document.getElementById('no-camera');
+
+    let model = null;
+    let stream = null;
+    let detecting = false;
+    let lastTime = performance.now();
+    let frameCount = 0;
+
+    // default confidence threshold
+    let minScore = parseFloat(minScoreEl.value);
+    minScoreEl.addEventListener('input', ()=>{
+      minScore = parseFloat(minScoreEl.value);
+      scoreLabel.textContent = minScore.toFixed(2);
+    });
+
+    // resize canvas to match video element
+    function resizeCanvas() {
+      overlay.width = video.videoWidth || 640;
+      overlay.height = video.videoHeight || 480;
+      overlay.style.width = video.clientWidth + 'px';
+      overlay.style.height = video.clientHeight + 'px';
+    }
+
+    async function startCamera(){
+      try{
+        stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment', width: {ideal: 1280}, height: {ideal: 720}}, audio:false});
+        video.srcObject = stream;
+        video.onloadedmetadata = ()=>{
+          resizeCanvas();
+          noCamera.style.display = 'none';
+        }
+      }catch(err){
+        console.error('Gagal akses kamera:', err);
+        noCamera.textContent = 'Tidak dapat mengakses kamera. Coba unggah gambar.';
+      }
+    }
+
+    async function stopCamera(){
+      if(stream){
+        stream.getTracks().forEach(t=>t.stop());
+        stream = null;
+      }
+      video.srcObject = null;
+      noCamera.style.display = '';
+    }
+
+    // load model
+    async function loadModel(){
+      modelNameEl.textContent = 'Loading...';
+      model = await cocoSsd.load();
+      modelNameEl.textContent = 'COCO-SSD (browser)';
+      console.log('Model loaded');
+    }
+
+    // draw detections
+    function drawDetections(detections){
+      ctx.clearRect(0,0,overlay.width, overlay.height);
+      const labels = new Set();
+      detections.forEach(det=>{
+        if(det.score < minScore) return;
+        const [x,y,width,height] = det.bbox; // coco-ssd bbox format
+        // scale factor if video element size differs from natural size
+        const sx = overlay.width / video.videoWidth;
+        const sy = overlay.height / video.videoHeight;
+        const rx = x * sx;
+        const ry = y * sy;
+        const rw = width * sx;
+        const rh = height * sy;
+
+        // box
+        ctx.lineWidth = Math.max(2, Math.round(overlay.width/300));
+        ctx.strokeStyle = 'rgba(6,182,212,0.95)';
+        ctx.fillStyle = 'rgba(6,182,212,0.12)';
+        roundRect(ctx, rx, ry, rw, rh, 6);
+        ctx.fill();
+        ctx.stroke();
+
+        // label background
+        const text = `${det.class} ${(det.score*100).toFixed(1)}%`;
+        ctx.font = `${12 + Math.round(overlay.width/200)}px ${'Segoe UI'}`;
+        const textW = ctx.measureText(text).width + 8;
+        const textH = 18;
+        ctx.fillStyle = 'rgba(2,6,23,0.85)';
+        ctx.fillRect(rx, Math.max(ry - textH, 0), textW, textH);
+        ctx.fillStyle = '#dff9ff';
+        ctx.fillText(text, rx + 4, Math.max(ry - 4, textH - 4));
+
+        labels.add(det.class);
+      });
+
+      // update label badges
+      labelList.innerHTML = '';
+      Array.from(labels).slice(0,20).forEach(l=>{
+        const b = document.createElement('div');
+        b.className = 'badge';
+        b.textContent = l;
+        labelList.appendChild(b);
+      });
+
+      countEl.textContent = labels.size;
+    }
+
+    // utility: rounded rectangle
+    function roundRect(ctx, x, y, w, h, r){
+      if (w < 2 * r) r = w / 2;
+      if (h < 2 * r) r = h / 2;
+      ctx.beginPath();
+      ctx.moveTo(x+r, y);
+      ctx.arcTo(x+w, y,   x+w, y+h, r);
+      ctx.arcTo(x+w, y+h, x,   y+h, r);
+      ctx.arcTo(x,   y+h, x,   y,   r);
+      ctx.arcTo(x,   y,   x+w, y,   r);
+      ctx.closePath();
+    }
+
+    // main detection loop
+    async function detectLoop(){
+      if(!model) return;
+      if(!detecting) return;
+      if(video.readyState < 2){
+        requestAnimationFrame(detectLoop);
+        return;
+      }
+
+      // run detection on current frame (uses tfjs backend)
+      try{
+        const predictions = await model.detect(video);
+        drawDetections(predictions);
+      }catch(err){
+        console.error('Error during detection:', err);
+      }
+
+      // fps calc
+      frameCount++;
+      const now = performance.now();
+      if(now - lastTime >= 1000){
+        fpsEl.textContent = frameCount;
+        frameCount = 0;
+        lastTime = now;
+      }
+
+      requestAnimationFrame(detectLoop);
+    }
+
+    startBtn.addEventListener('click', async ()=>{
+      if(!model) await loadModel();
+      if(!stream) await startCamera();
+      detecting = true;
+      detectLoop();
+    });
+
+    stopBtn.addEventListener('click', ()=>{
+      detecting = false;
+      stopCamera();
+      ctx.clearRect(0,0,overlay.width,overlay.height);
+      modelNameEl.textContent = model ? 'COCO-SSD (browser)' : '-';
+    });
+
+    // snapshot
+    snapshotBtn.addEventListener('click', ()=>{
+      // create a temporary canvas to capture visible (video + overlay)
+      const tmp = document.createElement('canvas');
+      tmp.width = overlay.width;
+      tmp.height = overlay.height;
+      const tctx = tmp.getContext('2d');
+      // because video and overlay are mirrored (flipped), draw video reversed
+      tctx.translate(tmp.width, 0);
+      tctx.scale(-1,1);
+      tctx.drawImage(video, 0, 0, tmp.width, tmp.height);
+      // un-flip to draw overlay on top in correct orientation
+      tctx.setTransform(1,0,0,1,0,0);
+      tctx.drawImage(overlay, 0, 0);
+      const url = tmp.toDataURL('image/png');
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'snapshot.png';
+      a.click();
+    });
+
+    // handle image upload for static detection
+    imgUpload.addEventListener('change', async (e)=>{
+      const file = e.target.files[0];
+      if(!file) return;
+      const img = new Image();
+      img.onload = async ()=>{
+        // pause camera if running
+        detecting = false;
+        stopCamera();
+
+        // draw image into video-like size container
+        overlay.width = img.naturalWidth;
+        overlay.height = img.naturalHeight;
+        video.style.display = 'none';
+        noCamera.style.display = 'none';
+
+        // make a temporary canvas to pass to model
+        const tmp = document.createElement('canvas');
+        tmp.width = img.naturalWidth;
+        tmp.height = img.naturalHeight;
+        const tctx = tmp.getContext('2d');
+        tctx.drawImage(img,0,0);
+
+        if(!model) await loadModel();
+        const preds = await model.detect(tmp);
+        // draw image into overlay's context as background for boxes
+        ctx.clearRect(0,0,overlay.width, overlay.height);
+        ctx.drawImage(img,0,0,overlay.width,overlay.height);
+        drawDetections(preds);
+      };
+      img.src = URL.createObjectURL(file);
+    });
+
+    // ensure canvas resizes when window changes
+    window.addEventListener('resize', ()=>{
+      resizeCanvas();
+    });
+
+    // load model eagerly to reduce first-run wait (optional)
+    // loadModel();
+
+    // small helper: warn user if no getUserMedia support
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      noCamera.textContent = 'Browser tidak mendukung getUserMedia. Coba browser modern (Chrome/Edge/Firefox).';
+    }
+
+  </script>
+</body>
+</html>
