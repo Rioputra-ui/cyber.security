@@ -1,365 +1,538 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="id">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Detektor Objek — Web (mirip p1 face detector)</title>
-  <style>
-    /* style.css - disertakan langsung agar mudah dipakai */
-    :root{
-      --bg:#0f1724; --card:#0b1220; --accent:#06b6d4; --muted:#94a3b8; --glass: rgba(255,255,255,0.03);
-      --radius:14px; --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Courier New", monospace;
-    }
-    *{box-sizing:border-box}
-    html,body{height:100%;margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial; background:linear-gradient(180deg,#071024 0%, #071b2b 100%); color:#e6eef6}
-    .wrap{max-width:1100px;margin:28px auto;padding:20px}
-    header{display:flex;gap:16px;align-items:center}
-    .logo{width:56px;height:56px;border-radius:12px;background:linear-gradient(135deg,var(--accent),#7c3aed);display:flex;align-items:center;justify-content:center;font-weight:700}
-    h1{margin:0;font-size:20px}
-    p.lead{margin:6px 0 0;color:var(--muted);font-size:13px}
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>TensorFlow Complete Detection System - Demo</title>
 
-    .card{background:var(--card);padding:14px;border-radius:var(--radius);box-shadow:0 6px 18px rgba(2,6,23,0.6);margin-top:18px}
-    .stage{display:grid;grid-template-columns:1fr 320px;gap:18px}
+<style>
+  :root{
+    --bg1:#213E8C;
+    --bg2:#6C3BCE;
+    --card:#ffffff;
+    --muted:#9aa6c3;
+    --accent:#2ee26e;
+  }
+  html,body{height:100%;margin:0;font-family:Inter, "Segoe UI", Roboto, system-ui, -apple-system;}
+  body{
+    background: linear-gradient(180deg,var(--bg1), var(--bg2));
+    padding: 28px;
+    box-sizing: border-box;
+  }
 
-    /* video + canvas container */
-    .viewer{position:relative;background:var(--glass);border-radius:12px;overflow:hidden;min-height:420px;display:flex;align-items:center;justify-content:center}
-    video{width:100%;height:auto;display:block;transform:scaleX(-1)} /* flip so it feels like a mirror */
-    canvas{position:absolute;left:0;top:0;pointer-events:none;transform:scaleX(-1)}
+  .app{
+    max-width:1200px;
+    margin:0 auto;
+    display:grid;
+    grid-template-columns: 1fr 360px;
+    gap:22px;
+  }
 
-    .controls{padding:12px}
-    .controls .row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
-    button{background:transparent;color:var(--accent);border:1px solid rgba(255,255,255,0.06);padding:8px 10px;border-radius:10px;cursor:pointer}
-    button.primary{background:linear-gradient(90deg,var(--accent),#7c3aed);color:#031023;border:none}
-    label{font-size:13px;color:var(--muted)}
+  header{
+    grid-column:1/-1;
+    color:#fff;
+    margin-bottom:6px;
+  }
 
-    .sidebar{display:flex;flex-direction:column;gap:12px}
-    .panel{background:linear-gradient(180deg,rgba(255,255,255,0.02),transparent);padding:10px;border-radius:10px}
-    .stats{font-family:var(--mono);font-size:13px;color:var(--muted)}
-    input[type=range]{width:100%}
-    .badges{display:flex;flex-wrap:wrap;gap:6px}
-    .badge{background:rgba(255,255,255,0.04);padding:6px 8px;border-radius:8px;font-size:13px}
+  header h1{
+    margin:0;
+    font-size:30px;
+    text-shadow:0 2px 6px rgba(0,0,0,0.3);
+  }
 
-    footer{margin-top:18px;font-size:13px;color:var(--muted)}
+  header p{
+    margin:6px 0 0;
+    color:#dde7ffb0;
+  }
 
-    @media (max-width:980px){
-      .stage{grid-template-columns:1fr}
-      .sidebar{order:2}
-    }
-  </style>
+  .panel{
+    background:var(--card);
+    border-radius:14px;
+    padding:18px;
+    box-shadow: 0 8px 30px rgba(3,12,36,0.25);
+  }
+
+  .video-wrap{
+    position:relative;
+    width:100%;
+    height:600px;
+    border-radius:10px;
+    overflow:hidden;
+    background:#111;
+  }
+
+  video#cam{
+    width:100%;
+    height:100%;
+    object-fit:cover;
+    transform: scaleX(-1);
+  }
+
+  canvas#overlay{
+    position:absolute;
+    left:0; top:0;
+    width:100%; height:100%;
+    pointer-events:none;
+  }
+
+  .badge{
+    position:absolute;
+    left:12px; top:12px;
+    background: rgba(0,0,0,0.6);
+    color:#fff;
+    padding:10px 12px;
+    border-radius:8px;
+    font-size:13px;
+    line-height:1.2;
+  }
+
+  .fps{
+    position:absolute;
+    right:12px; top:12px;
+    background:#0f0f0f;
+    color:#6fff6f;
+    padding:8px 10px;
+    border-radius:8px;
+    font-weight:700;
+  }
+
+  .sidebar{
+    display:flex;
+    flex-direction:column;
+    gap:18px;
+  }
+
+  .card{
+    background:var(--card);
+    border-radius:12px;
+    padding:14px;
+    box-shadow: 0 6px 20px rgba(3,12,36,0.12);
+  }
+
+  .card h3{margin:0 0 10px;color:#24324a;}
+
+  .info-color{
+    display:flex;
+    gap:12px;
+    align-items:center;
+  }
+
+  .swatch{
+    width:86px;height:86px;border-radius:10px;
+    box-shadow:0 8px 20px rgba(3,12,36,0.08);
+    border:1px solid rgba(0,0,0,0.06);
+  }
+
+  .meta small{
+    color:var(--muted);
+    display:block;
+  }
+
+  .big-number{
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    font-weight:700;
+    font-size:34px;
+    color:#fff;
+    background:linear-gradient(180deg,#6e8cff,#7b5bff);
+    padding:20px;
+    border-radius:12px;
+  }
+
+  .controls{
+    display:flex;
+    gap:8px;
+    margin-top:12px;
+    justify-content:center;
+  }
+
+  button{
+    padding:10px 16px;
+    border-radius:999px;
+    border:none;
+    font-weight:600;
+    cursor:pointer;
+  }
+
+  .btn-start{
+    background:linear-gradient(90deg,#5a91ff,#7b5bff); color:white
+  }
+
+  .btn-stop{
+    background:linear-gradient(90deg,#ff7d8a,#ffb0d0); color:white
+  }
+
+  .obj-list{
+    min-height:120px;
+    padding:8px;
+    border-radius:10px;
+    background:#fafcff;
+    border:1px solid rgba(0,0,0,0.03)
+  }
+
+  .obj-item{
+    padding:6px 8px;
+    border-radius:8px;
+    margin-bottom:6px;
+    background:linear-gradient(180deg,#0bff0070,#0bff00);
+    color:#003800;
+    font-weight:700;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+  }
+
+  footer{
+    grid-column:1/-1;
+    margin-top:12px;
+    color:#eaf0ff;
+    font-size:13px;
+    text-align:right;
+  }
+
+  @media(max-width:1000px){
+    .app{grid-template-columns:1fr}
+    .video-wrap{height:480px}
+  }
+</style>
 </head>
 <body>
-  <div class="wrap">
+  <div class="app">
     <header>
-      <div class="logo">OD</div>
-      <div>
-        <h1>Detektor Objek (Webcam) — mirip page p1 (face detector)</h1>
-        <p class="lead">Deteksi objek realtime pakai model COCO-SSD (TensorFlow.js). Buka izin kamera, lalu tekan "Start".</p>
-      </div>
+      <h1>TensorFlow Complete Detection System</h1>
+      <p>Deteksi Objek, Warna & Jarak Secara Realtime (demo)</p>
     </header>
 
-    <div class="card">
-      <div class="stage">
-        <div>
-          <div class="viewer" id="viewer">
-            <video id="video" autoplay muted playsinline></video>
-            <canvas id="overlay"></canvas>
-            <!-- fallback message -->
-            <div id="no-camera" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:16px;">Izinkan kamera atau unggah gambar</div>
-          </div>
-
-          <div style="display:flex;gap:8px;margin-top:10px;align-items:center">
-            <div class="controls">
-              <div class="row">
-                <button id="startBtn" class="primary">Start Kamera</button>
-                <button id="stopBtn">Stop</button>
-                <button id="snapshotBtn">Ambil Snapshot</button>
-                <input id="imgUpload" type="file" accept="image/*" />
-              </div>
-              <div class="row">
-                <label for="minScore">Ambang kepercayaan: <span id="scoreLabel">0.5</span></label>
-                <input id="minScore" type="range" min="0" max="1" step="0.01" value="0.5" />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <aside class="sidebar">
-          <div class="panel">
-            <div class="stats">
-              <div>Model: <strong id="modelName">-</strong></div>
-              <div>FPS: <strong id="fps">0</strong></div>
-              <div>Objek terdeteksi: <strong id="count">0</strong></div>
-            </div>
-            <div style="margin-top:8px" class="badges" id="labelList"></div>
-          </div>
-
-          <div class="panel">
-            <div style="font-weight:600">Petunjuk singkat</div>
-            <ol style="margin:8px 0 0 16px;color:var(--muted);font-size:13px">
-              <li>Beri izin kamera lalu tekan <em>Start Kamera</em>.</li>
-              <li>Atur ambang kepercayaan (confidence) jika ingin lebih selektif.</li>
-              <li>Bisa juga unggah gambar untuk deteksi statis.</li>
-            </ol>
-          </div>
-
-          <div class="panel">
-            <div style="font-weight:600">Informasi</div>
-            <div style="color:var(--muted);font-size:13px;margin-top:6px">Model: COCO-SSD (80 kelas umum). Tidak perlu server — semua berjalan di browser.</div>
-          </div>
-        </aside>
+    <div class="panel">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="font-weight:700;color:#24324a">Mode: <span id="modeLabel">Semua Aktif</span></div>
+        <div style="color:#6b7280;font-size:13px">Objek terdeteksi: <strong id="objCount">0</strong></div>
       </div>
 
-      <footer>
-        Catatan: performa bergantung perangkat. Untuk hasil lebih cepat gunakan laptop/PC dengan GPU.
-      </footer>
+      <div class="video-wrap" id="videoWrap">
+        <video id="cam" autoplay muted playsinline></video>
+        <canvas id="overlay"></canvas>
+
+        <div class="badge" id="badgeTop">
+          <div style="font-size:13px">🔍 Mode: Semua Aktif</div>
+          <div style="margin-top:6px;font-size:13px">🎯 Warna: <span id="detectedName">Tidak Dikenal</span></div>
+          <div style="margin-top:6px;font-size:13px">📏 Jarak: <span id="detectedDist">-</span></div>
+        </div>
+
+        <div class="fps" id="fps">FPS: 0</div>
+      </div>
+
+      <div style="display:flex;gap:12px;align-items:center;margin-top:14px;justify-content:center">
+        <button class="btn-start" id="startBtn">Mulai Kamera</button>
+        <button class="btn-stop" id="stopBtn">Stop Kamera</button>
+      </div>
     </div>
+
+    <div class="sidebar">
+      <div class="card">
+        <h3>Deteksi Objek</h3>
+        <div class="obj-list" id="objectList"></div>
+      </div>
+
+      <div class="card">
+        <h3>Deteksi Warna</h3>
+        <div style="display:flex;align-items:center;gap:12px">
+          <div class="swatch" id="swatch"></div>
+          <div class="meta">
+            <strong id="colorName">Tidak Dikenal</strong>
+            <small id="rgbText">RGB: -</small>
+            <small id="hexText">HEX: -</small>
+            <small id="hslText">HSL: -</small>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Deteksi Jarak</h3>
+        <div class="big-number" id="distBox">-</div>
+      </div>
+    </div>
+
+    <footer>Demo menggunakan TensorFlow.js (COCO-SSD). Tidak 100% akurat untuk jarak — ini estimasi.</footer>
   </div>
 
-  <!-- Libraries: TensorFlow.js dan COCO-SSD -->
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.9.0/dist/tf.min.js"></script>
+  <!-- TFJS & COCO SSD -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.11.0/dist/tf.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.2/dist/coco-ssd.min.js"></script>
 
   <script>
-    // script.js (lengkap)
-    const video = document.getElementById('video');
-    const overlay = document.getElementById('overlay');
-    const ctx = overlay.getContext('2d');
-    const startBtn = document.getElementById('startBtn');
-    const stopBtn = document.getElementById('stopBtn');
-    const snapshotBtn = document.getElementById('snapshotBtn');
-    const imgUpload = document.getElementById('imgUpload');
+  const video = document.getElementById('cam');
+  const overlay = document.getElementById('overlay');
+  const ctx = overlay.getContext('2d');
+  const startBtn = document.getElementById('startBtn');
+  const stopBtn = document.getElementById('stopBtn');
+  const fpsEl = document.getElementById('fps');
+  const objCountEl = document.getElementById('objCount');
+  const objectList = document.getElementById('objectList');
+  const swatch = document.getElementById('swatch');
+  const colorNameEl = document.getElementById('colorName');
+  const rgbText = document.getElementById('rgbText');
+  const hexText = document.getElementById('hexText');
+  const hslText = document.getElementById('hslText');
+  const detectedNameEl = document.getElementById('detectedName');
+  const detectedDistEl = document.getElementById('detectedDist');
+  const distBox = document.getElementById('distBox');
 
-    const modelNameEl = document.getElementById('modelName');
-    const fpsEl = document.getElementById('fps');
-    const countEl = document.getElementById('count');
-    const labelList = document.getElementById('labelList');
-    const minScoreEl = document.getElementById('minScore');
-    const scoreLabel = document.getElementById('scoreLabel');
-    const noCamera = document.getElementById('no-camera');
+  let model = null;
+  let stream = null;
+  let running = false;
 
-    let model = null;
-    let stream = null;
-    let detecting = false;
-    let lastTime = performance.now();
-    let frameCount = 0;
+  let lastTime = performance.now();
+  let frames = 0;
+  let fps = 0;
 
-    // default confidence threshold
-    let minScore = parseFloat(minScoreEl.value);
-    minScoreEl.addEventListener('input', ()=>{
-      minScore = parseFloat(minScoreEl.value);
-      scoreLabel.textContent = minScore.toFixed(2);
-    });
+  const DIST_CONST = 400;
 
-    // resize canvas to match video element
-    function resizeCanvas() {
-      overlay.width = video.videoWidth || 640;
-      overlay.height = video.videoHeight || 480;
-      overlay.style.width = video.clientWidth + 'px';
-      overlay.style.height = video.clientHeight + 'px';
-    }
+  async function startAll(){
+    if(running) return;
 
-    async function startCamera(){
-      try{
-        stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment', width: {ideal: 1280}, height: {ideal: 720}}, audio:false});
-        video.srcObject = stream;
-        video.onloadedmetadata = ()=>{
-          resizeCanvas();
-          noCamera.style.display = 'none';
-        }
-      }catch(err){
-        console.error('Gagal akses kamera:', err);
-        noCamera.textContent = 'Tidak dapat mengakses kamera. Coba unggah gambar.';
-      }
-    }
-
-    async function stopCamera(){
-      if(stream){
-        stream.getTracks().forEach(t=>t.stop());
-        stream = null;
-      }
-      video.srcObject = null;
-      noCamera.style.display = '';
-    }
-
-    // load model
-    async function loadModel(){
-      modelNameEl.textContent = 'Loading...';
-      model = await cocoSsd.load();
-      modelNameEl.textContent = 'COCO-SSD (browser)';
-      console.log('Model loaded');
-    }
-
-    // draw detections
-    function drawDetections(detections){
-      ctx.clearRect(0,0,overlay.width, overlay.height);
-      const labels = new Set();
-      detections.forEach(det=>{
-        if(det.score < minScore) return;
-        const [x,y,width,height] = det.bbox; // coco-ssd bbox format
-        // scale factor if video element size differs from natural size
-        const sx = overlay.width / video.videoWidth;
-        const sy = overlay.height / video.videoHeight;
-        const rx = x * sx;
-        const ry = y * sy;
-        const rw = width * sx;
-        const rh = height * sy;
-
-        // box
-        ctx.lineWidth = Math.max(2, Math.round(overlay.width/300));
-        ctx.strokeStyle = 'rgba(6,182,212,0.95)';
-        ctx.fillStyle = 'rgba(6,182,212,0.12)';
-        roundRect(ctx, rx, ry, rw, rh, 6);
-        ctx.fill();
-        ctx.stroke();
-
-        // label background
-        const text = `${det.class} ${(det.score*100).toFixed(1)}%`;
-        ctx.font = `${12 + Math.round(overlay.width/200)}px ${'Segoe UI'}`;
-        const textW = ctx.measureText(text).width + 8;
-        const textH = 18;
-        ctx.fillStyle = 'rgba(2,6,23,0.85)';
-        ctx.fillRect(rx, Math.max(ry - textH, 0), textW, textH);
-        ctx.fillStyle = '#dff9ff';
-        ctx.fillText(text, rx + 4, Math.max(ry - 4, textH - 4));
-
-        labels.add(det.class);
+    try{
+      stream = await navigator.mediaDevices.getUserMedia({
+        video:{width:1280,height:720},
+        audio:false
       });
 
-      // update label badges
-      labelList.innerHTML = '';
-      Array.from(labels).slice(0,20).forEach(l=>{
-        const b = document.createElement('div');
-        b.className = 'badge';
-        b.textContent = l;
-        labelList.appendChild(b);
-      });
+      video.srcObject = stream;
+      await video.play();
 
-      countEl.textContent = labels.size;
-    }
+      overlay.width = video.videoWidth;
+      overlay.height = video.videoHeight;
 
-    // utility: rounded rectangle
-    function roundRect(ctx, x, y, w, h, r){
-      if (w < 2 * r) r = w / 2;
-      if (h < 2 * r) r = h / 2;
-      ctx.beginPath();
-      ctx.moveTo(x+r, y);
-      ctx.arcTo(x+w, y,   x+w, y+h, r);
-      ctx.arcTo(x+w, y+h, x,   y+h, r);
-      ctx.arcTo(x,   y+h, x,   y,   r);
-      ctx.arcTo(x,   y,   x+w, y,   r);
-      ctx.closePath();
-    }
+      running = true;
 
-    // main detection loop
-    async function detectLoop(){
-      if(!model) return;
-      if(!detecting) return;
-      if(video.readyState < 2){
-        requestAnimationFrame(detectLoop);
-        return;
+      if(!model){
+        model = await cocoSsd.load();
       }
 
-      // run detection on current frame (uses tfjs backend)
-      try{
-        const predictions = await model.detect(video);
-        drawDetections(predictions);
-      }catch(err){
-        console.error('Error during detection:', err);
-      }
-
-      // fps calc
-      frameCount++;
-      const now = performance.now();
-      if(now - lastTime >= 1000){
-        fpsEl.textContent = frameCount;
-        frameCount = 0;
-        lastTime = now;
-      }
-
-      requestAnimationFrame(detectLoop);
-    }
-
-    startBtn.addEventListener('click', async ()=>{
-      if(!model) await loadModel();
-      if(!stream) await startCamera();
-      detecting = true;
       detectLoop();
-    });
 
-    stopBtn.addEventListener('click', ()=>{
-      detecting = false;
-      stopCamera();
-      ctx.clearRect(0,0,overlay.width,overlay.height);
-      modelNameEl.textContent = model ? 'COCO-SSD (browser)' : '-';
-    });
-
-    // snapshot
-    snapshotBtn.addEventListener('click', ()=>{
-      // create a temporary canvas to capture visible (video + overlay)
-      const tmp = document.createElement('canvas');
-      tmp.width = overlay.width;
-      tmp.height = overlay.height;
-      const tctx = tmp.getContext('2d');
-      // because video and overlay are mirrored (flipped), draw video reversed
-      tctx.translate(tmp.width, 0);
-      tctx.scale(-1,1);
-      tctx.drawImage(video, 0, 0, tmp.width, tmp.height);
-      // un-flip to draw overlay on top in correct orientation
-      tctx.setTransform(1,0,0,1,0,0);
-      tctx.drawImage(overlay, 0, 0);
-      const url = tmp.toDataURL('image/png');
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'snapshot.png';
-      a.click();
-    });
-
-    // handle image upload for static detection
-    imgUpload.addEventListener('change', async (e)=>{
-      const file = e.target.files[0];
-      if(!file) return;
-      const img = new Image();
-      img.onload = async ()=>{
-        // pause camera if running
-        detecting = false;
-        stopCamera();
-
-        // draw image into video-like size container
-        overlay.width = img.naturalWidth;
-        overlay.height = img.naturalHeight;
-        video.style.display = 'none';
-        noCamera.style.display = 'none';
-
-        // make a temporary canvas to pass to model
-        const tmp = document.createElement('canvas');
-        tmp.width = img.naturalWidth;
-        tmp.height = img.naturalHeight;
-        const tctx = tmp.getContext('2d');
-        tctx.drawImage(img,0,0);
-
-        if(!model) await loadModel();
-        const preds = await model.detect(tmp);
-        // draw image into overlay's context as background for boxes
-        ctx.clearRect(0,0,overlay.width, overlay.height);
-        ctx.drawImage(img,0,0,overlay.width,overlay.height);
-        drawDetections(preds);
-      };
-      img.src = URL.createObjectURL(file);
-    });
-
-    // ensure canvas resizes when window changes
-    window.addEventListener('resize', ()=>{
-      resizeCanvas();
-    });
-
-    // load model eagerly to reduce first-run wait (optional)
-    // loadModel();
-
-    // small helper: warn user if no getUserMedia support
-    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
-      noCamera.textContent = 'Browser tidak mendukung getUserMedia. Coba browser modern (Chrome/Edge/Firefox).';
+    }catch(e){
+      alert("Gagal membuka kamera: " + e.message);
     }
+  }
+
+  function stopAll(){
+    running = false;
+    if(stream){
+      stream.getTracks().forEach(t=>t.stop());
+      stream = null;
+    }
+    ctx.clearRect(0,0,overlay.width,overlay.height);
+  }
+
+  async function detectLoop(){
+    if(!running) return;
+
+    const predictions = await model.detect(video, 20);
+
+    frames++;
+    const now = performance.now();
+    if(now - lastTime >= 1000){
+      fps = frames;
+      frames = 0;
+      lastTime = now;
+      fpsEl.textContent = "FPS: " + fps;
+    }
+
+    ctx.clearRect(0,0,overlay.width,overlay.height);
+
+    let objs = [];
+
+    predictions.forEach(pred => {
+      const [x,y,w,h] = pred.bbox;
+      const drawX = overlay.width - (x + w);
+
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = "#00ff33";
+      ctx.fillStyle = "#00ff33";
+
+      ctx.beginPath();
+      roundRect(ctx, drawX, y, w, h, 6);
+      ctx.stroke();
+
+      ctx.font = "18px Poppins, Inter, sans-serif";
+      const label = `${pred.class} ${Math.round(pred.score*100)}%`;
+
+      const txtW = ctx.measureText(label).width + 12;
+      ctx.fillRect(drawX, y - 28, txtW, 26);
+
+      ctx.fillStyle = "#002700";
+      ctx.fillText(label, drawX + 6, y - 6);
+
+      objs.push({
+        cls: pred.class,
+        score: pred.score,
+        bbox: pred.bbox
+      });
+    });
+
+    objectList.innerHTML = "";
+    objs.slice(0,6).forEach(o=>{
+      const div = document.createElement("div");
+      div.className = "obj-item";
+      div.innerHTML = `
+        <div>${o.cls}</div>
+        <div>${Math.round(o.score*100)}%</div>
+      `;
+      objectList.appendChild(div);
+    });
+
+    objCountEl.textContent = objs.length;
+
+    // Color
+    const c = sampleCenterPixel();
+    updateColorUI(c);
+
+    // Distance
+    if(objs.length>0){
+      let maxH = 0, chosen=null;
+      objs.forEach(o=>{
+        if(o.bbox[3] > maxH){
+          maxH = o.bbox[3];
+          chosen = o;
+        }
+      });
+
+      if(chosen){
+        const est = estimateDistance(maxH);
+        distBox.textContent = est.toFixed(2)+" m";
+        detectedDistEl.textContent = est.toFixed(2)+" m";
+      }
+    }
+
+    drawCrosshair();
+    requestAnimationFrame(detectLoop);
+  }
+
+  function roundRect(ctx,x,y,w,h,r){
+    ctx.moveTo(x+r,y);
+    ctx.lineTo(x+w-r,y);
+    ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+    ctx.lineTo(x+w,y+h-r);
+    ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+    ctx.lineTo(x+r,y+h);
+    ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+    ctx.lineTo(x,y+r);
+    ctx.quadraticCurveTo(x,y,x+r,y);
+  }
+
+  function drawCrosshair(){
+    const cx = overlay.width/2;
+    const cy = overlay.height/2;
+
+    ctx.strokeStyle = "#00ff7f";
+    ctx.lineWidth = 2;
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, 18, 0, Math.PI*2);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(cx-28, cy);
+    ctx.lineTo(cx-8, cy);
+    ctx.moveTo(cx+8, cy);
+    ctx.lineTo(cx+28, cy);
+    ctx.moveTo(cx, cy-28);
+    ctx.lineTo(cx, cy-8);
+    ctx.moveTo(cx, cy+8);
+    ctx.lineTo(cx, cy+28);
+    ctx.stroke();
+  }
+
+  function sampleCenterPixel(){
+    const tmp = document.createElement("canvas");
+    tmp.width = video.videoWidth;
+    tmp.height = video.videoHeight;
+
+    const tctx = tmp.getContext("2d");
+    tctx.drawImage(video,0,0,tmp.width,tmp.height);
+
+    const cx = Math.floor(tmp.width/2);
+    const cy = Math.floor(tmp.height/2);
+
+    try{
+      const d = tctx.getImageData(cx,cy,1,1).data;
+      return {r:d[0], g:d[1], b:d[2]};
+    }catch(e){
+      return {r:0,g:0,b:0};
+    }
+  }
+
+  function updateColorUI({r,g,b}){
+    const hex = rgbToHex(r,g,b);
+    const hsl = rgbToHslArray(r,g,b);
+    const name = lookupBasicColorName(r,g,b);
+
+    swatch.style.background = hex;
+    colorNameEl.textContent = name;
+
+    rgbText.textContent = `RGB: ${r}, ${g}, ${b}`;
+    hexText.textContent = `HEX: ${hex}`;
+    hslText.textContent = `HSL: ${Math.round(hsl[0])}°, ${Math.round(hsl[1])}%, ${Math.round(hsl[2])}%`;
+
+    detectedNameEl.textContent = name;
+  }
+
+  function lookupBasicColorName(r, g, b){
+    let brightness = (r+g+b)/3;
+    let diff = Math.max(r,g,b) - Math.min(r,g,b);
+
+    if(brightness > 200 && diff < 20) return "Putih";
+    if(brightness < 50 && diff < 20) return "Hitam";
+    if(diff < 20) return "Abu-abu";
+
+    if(r>180 && g<100 && b<100) return "Merah";
+    if(g>170 && r<120 && b<120) return "Hijau";
+    if(b>150 && r<120 && g<120) return "Biru";
+    if(r>200 && g>200 && b<120) return "Kuning";
+    if(r>150 && b>150 && g<130) return "Ungu / Magenta";
+    if(g>150 && b>150 && r<130) return "Cyan";
+
+    if(r>120 && g>90 && b<70) return "Coklat";
+    if(r>160 && g>110 && b>90) return "Skin Tone";
+
+    return "Tidak Dikenal";
+  }
+
+  function rgbToHex(r,g,b){
+    return "#" + [r,g,b].map(v=>v.toString(16).padStart(2,"0")).join("").toUpperCase();
+  }
+
+  function rgbToHslArray(r,g,b){
+    r/=255; g/=255; b/=255;
+    const max=Math.max(r,g,b), min=Math.min(r,g,b);
+    let h,s,l=(max+min)/2;
+
+    if(max===min){
+      h=s=0;
+    }else{
+      const d=max-min;
+      s = l>0.5 ? d/(2-max-min) : d/(max+min);
+      switch(max){
+        case r: h=(g-b)/d + (g<b?6:0); break;
+        case g: h=(b-r)/d + 2; break;
+        case b: h=(r-g)/d + 4; break;
+      }
+      h/=6;
+    }
+
+    return [h*360, s*100, l*100];
+  }
+
+  function estimateDistance(h){
+    return Math.max(0.15, Math.min(10, DIST_CONST / h));
+  }
+
+  startBtn.addEventListener("click", startAll);
+  stopBtn.addEventListener("click", stopAll);
 
   </script>
+
 </body>
 </html>
